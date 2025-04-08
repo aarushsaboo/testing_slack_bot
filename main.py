@@ -15,6 +15,8 @@ app = Flask(__name__)
 # Initialize a Web client with your bot token
 client = WebClient(token=os.environ.get("SLACK_BOT_TOKEN"))
 
+# Handle both root URL and /slack/events URL for the event subscription
+@app.route("/", methods=["POST"])
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     # Get the JSON data from the request
@@ -22,13 +24,13 @@ def slack_events():
     print(f"Received event: {data}")  # Debug logging
     
     # Handle URL verification challenge
-    if "challenge" in data:
+    if data and "challenge" in data:
         challenge = data["challenge"]
         print(f"Responding to challenge: {challenge}")
         return jsonify({"challenge": challenge})
     
     # Handle message events
-    if "event" in data and data["event"]["type"] == "message":
+    if data and "event" in data and data["event"]["type"] == "message":
         # Ignore messages from bots (including our own) to prevent loops
         if "bot_id" not in data["event"]:
             try:
@@ -43,13 +45,10 @@ def slack_events():
     
     return jsonify({"status": "ok"})
 
-# Simple health check endpoint
+# Simple health check endpoint - now only for GET requests
 @app.route("/", methods=["GET"])
 def health_check():
     return "Bot is running!"
 
 if __name__ == "__main__":
-    # Get port from environment variable or use 3000 as default
-    # port = int(os.environ.get("PORT", 3000))
-    # print(f"Starting app on port {port}")
     app.run(host="0.0.0.0", port=3000, debug=True)
