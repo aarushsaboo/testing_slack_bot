@@ -1,1 +1,1 @@
-pip install slack_sdk flask
+pip install slack_sdk flask requests

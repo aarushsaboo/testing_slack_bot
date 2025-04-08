@@ -1,6 +1,8 @@
 import os
 import time
 import re
+import requests
+import json
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from flask import Flask, request, jsonify
@@ -14,6 +16,49 @@ app = Flask(__name__)
 
 # Initialize a Web client with your bot token
 client = WebClient(token=os.environ.get("SLACK_BOT_TOKEN"))
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+def get_gemini_response(message):
+    """Get a response from Gemini API"""
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent"
+    
+    headers = {
+        "Content-Type": "application/json",
+    }
+    
+    data = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": message
+                    }
+                ]
+            }
+        ]
+    }
+    
+    params = {
+        "key": GEMINI_API_KEY
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data, params=params)
+        response.raise_for_status()
+        
+        response_json = response.json()
+        # Extract the text from the response
+        if "candidates" in response_json and len(response_json["candidates"]) > 0:
+            candidate = response_json["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                for part in candidate["content"]["parts"]:
+                    if "text" in part:
+                        return part["text"]
+        
+        return "I couldn't generate a response."
+    except Exception as e:
+        print(f"Error with Gemini API: {e}")
+        return "Sorry, I encountered an error while processing your request."
 
 # Handle both root URL and /slack/events URL for the event subscription
 @app.route("/", methods=["POST"])
@@ -35,10 +80,15 @@ def slack_events():
         if "bot_id" not in data["event"]:
             try:
                 channel = data["event"]["channel"]
+                user_message = data["event"].get("text", "")
+                
+                # Get response from Gemini
+                response_text = get_gemini_response(user_message)
+                
                 print(f"Sending message to channel: {channel}")
                 client.chat_postMessage(
                     channel=channel,
-                    text="Hello, how are you?"
+                    text=response_text
                 )
             except SlackApiError as e:
                 print(f"Error posting message: {e}")
